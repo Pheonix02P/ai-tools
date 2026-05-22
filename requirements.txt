@@ -1,0 +1,6 @@
+streamlit
+google-cloud-aiplatform
+google-auth
+Pillow
+requests
+PyMuPDF
