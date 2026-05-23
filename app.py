@@ -747,7 +747,7 @@ def render_brochure_usp_analyzer():
 
             if analyze_button:
                 client = setup_gemini_client()
-                if not model:
+                if not client:
                     st.stop()
 
                 start_time = time.time()
@@ -758,13 +758,18 @@ def render_brochure_usp_analyzer():
                     full_prompt = base_prompt
                     if old_usps.strip():
                         full_prompt += old_usps_prompt.format(old_usps=old_usps)
-                    analysis = analyze_pdf_via_files_api(pdf_bytes, full_prompt, selected_model, model)
+                    analysis = analyze_pdf_via_files_api(pdf_bytes, full_prompt, selected_model, client)
 
                 elif input_mode == "website":
                     full_prompt = base_prompt
                     if old_usps.strip():
                         full_prompt += old_usps_prompt.format(old_usps=old_usps)
-                    analysis = analyze_website_via_gemini(website_url.strip(), full_prompt, selected_model, model)
+                    analysis = analyze_website_via_gemini(
+                        website_url.strip(),
+                        full_prompt,
+                        selected_model,
+                        client
+                    )
 
                 execution_time = time.time() - start_time
 
@@ -820,8 +825,8 @@ def render_brochure_usp_analyzer():
             amenities_placeholder = st.empty()
 
             if amenities_button:
-                model = setup_vertex_model(project_id, location, selected_model)
-                if not model:
+                client = setup_gemini_client()
+                if not client:
                     st.stop()
 
                 start_time = time.time()
@@ -830,11 +835,19 @@ def render_brochure_usp_analyzer():
 
                 if input_mode == "pdf":
                     raw = analyze_pdf_via_files_api(
-                        pdf_bytes, amenities_extraction_prompt, selected_model, model
+                        pdf_bytes,
+                        amenities_extraction_prompt,
+                        selected_model,
+                        client
                     )
 
                 elif input_mode == "website":
-                    raw = analyze_website_via_gemini(website_url.strip(), amenities_extraction_prompt, selected_model, model)
+                    raw = analyze_website_via_gemini(
+                        website_url.strip(),
+                        amenities_extraction_prompt,
+                        selected_model,
+                        client
+                    )
 
                 execution_time = time.time() - start_time
 
@@ -898,8 +911,8 @@ def render_brochure_usp_analyzer():
             specs_placeholder = st.empty()
 
             if specs_button:
-                model = setup_vertex_model(project_id, location, selected_model)
-                if not model:
+                client = setup_gemini_client()
+                if not client:
                     st.stop()
 
                 start_time = time.time()
@@ -908,11 +921,19 @@ def render_brochure_usp_analyzer():
 
                 if input_mode == "pdf":
                     raw = analyze_pdf_via_files_api(
-                        pdf_bytes, specifications_prompt, selected_model, model
+                        pdf_bytes,
+                        specifications_prompt,
+                        selected_model,
+                        client
                     )
-
+                
                 elif input_mode == "website":
-                    raw = analyze_website_via_gemini(website_url.strip(), specifications_prompt, selected_model, model)
+                    raw = analyze_website_via_gemini(
+                        website_url.strip(),
+                        specifications_prompt,
+                        selected_model,
+                        client
+                    )
 
                 execution_time = time.time() - start_time
 
