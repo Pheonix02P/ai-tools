@@ -1,6 +1,8 @@
 import streamlit as st
 from google import genai
 from google.genai import types
+import vertexai
+from vertexai.generative_models import GenerativeModel, GenerationConfig, Part
 import json
 import base64
 from PIL import Image
