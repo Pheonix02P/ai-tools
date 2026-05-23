@@ -653,7 +653,7 @@ def render_brochure_usp_analyzer():
     # Model selection
     st.subheader("Select Gemini Model")
     model_options = {
-        "Gemini 3.1 pro": "gemini-3.1-pro-preview",
+        "Gemini 3.1 pro": "gemini-3.5-flash",
         "Gemini 2.5 flash": "gemini-2.5-flash",
     }
     selected_model_name = st.selectbox(
@@ -1446,7 +1446,7 @@ Rules:
 # ── Sidebar — Vertex AI Configuration ──────────────────────────────────────────
 with st.sidebar:
     st.markdown("---")
-    st.markdown("**Model:** `gemini-3.1-pro-preview`")
+    st.markdown("**Model:** `gemini-3.5-flash`")
     st.markdown("**Supported formats:** JPG, PNG, WEBP, PDF (all pages)")
     st.markdown("---")
     st.markdown("**Result is ✅ only when:**")
@@ -1607,7 +1607,7 @@ def analyze_form(project_id: str, location: str, parts: list) -> dict:
         st.secrets["gcp_service_account"]
     )
     vertexai.init(project=project_id, location=location, credentials=credentials)
-    model = GenerativeModel("gemini-3.1-pro-preview")
+    model = GenerativeModel("gemini-3.5-flash")
 
     content = [SYSTEM_PROMPT] + parts
 
