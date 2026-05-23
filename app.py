@@ -20,7 +20,7 @@ PYMUPDF_AVAILABLE = True
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="99acres Consent Form Analyzer",
+    page_title="Analyzer",
     page_icon="🏠",
     layout="wide",
 )
@@ -653,7 +653,7 @@ def render_brochure_usp_analyzer():
     # Model selection
     st.subheader("Select Gemini Model")
     model_options = {
-        "Gemini 2.5 pro": "gemini-2.5-pro",
+        "Gemini 3.1 pro": "gemini-3.1-pro-preview",
         "Gemini 2.5 flash": "gemini-2.5-flash",
     }
     selected_model_name = st.selectbox(
@@ -1446,7 +1446,7 @@ Rules:
 # ── Sidebar — Vertex AI Configuration ──────────────────────────────────────────
 with st.sidebar:
     st.markdown("---")
-    st.markdown("**Model:** `gemini-2.5-pro`")
+    st.markdown("**Model:** `gemini-3.1-pro-preview`")
     st.markdown("**Supported formats:** JPG, PNG, WEBP, PDF (all pages)")
     st.markdown("---")
     st.markdown("**Result is ✅ only when:**")
@@ -1607,7 +1607,7 @@ def analyze_form(project_id: str, location: str, parts: list) -> dict:
         st.secrets["gcp_service_account"]
     )
     vertexai.init(project=project_id, location=location, credentials=credentials)
-    model = GenerativeModel("gemini-2.5-pro")
+    model = GenerativeModel("gemini-3.1-pro-preview")
 
     content = [SYSTEM_PROMPT] + parts
 
