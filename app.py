@@ -1604,7 +1604,10 @@ def apply_rera_reason(data: dict, reason: str) -> dict:
 
 
 def analyze_form(project_id: str, location: str, parts: list) -> dict:
-    vertexai.init(project=project_id, location=location)
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    vertexai.init(project=project_id, location=location, credentials=credentials)
     model = GenerativeModel("gemini-2.5-pro")
 
     content = [SYSTEM_PROMPT] + parts
