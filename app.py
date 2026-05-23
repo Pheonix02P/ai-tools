@@ -1,6 +1,6 @@
 import streamlit as st
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
+from google import genai
+from google.genai import types
 import json
 import base64
 from PIL import Image
@@ -360,22 +360,27 @@ project_id = st.secrets["GCP_PROJECT_ID"]
 location = st.secrets["GCP_LOCATION"]
 # ── Helper functions ───────────────────────────────────────────────────────────
 @st.cache_resource
-def setup_vertex_model(project_id, location, model_name):
+def setup_gemini_client():
     try:
         credentials = service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"]
         )
 
-        vertexai.init(
-            project=project_id,
-            location=location,
+        client = genai.Client(
+            vertexai=True,
+            project=st.secrets["GCP_PROJECT_ID"],
+            location=st.secrets["GCP_LOCATION"],
             credentials=credentials,
         )
 
-        return GenerativeModel(model_name)
+        return client
 
     except Exception as e:
-        st.error(f"Error configuring Vertex AI: {str(e)}")
+        st.error(f"Gemini client error: {str(e)}")
+
+        import traceback
+        st.code(traceback.format_exc())
+
         return None
 
 def download_pdf_from_url(url):
@@ -392,47 +397,58 @@ def download_pdf_from_url(url):
         return None
 
 
-def analyze_website_via_gemini(url, prompt, model_name, model):
-    """Fetch website HTML and analyze it with Vertex Gemini."""
+def analyze_website_via_gemini(url, prompt, model_name, client):
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
+
         html = response.text[:200000]
+
         with st.spinner(f"Analyzing website with {model_name}..."):
-            result = model.generate_content(
-                [
+
+            result = client.models.generate_content(
+                model=model_name,
+                contents=[
                     prompt,
-                    f"Website URL: {url}\n\nWebsite HTML content:\n{html}",
+                    f"Website URL: {url}\n\nWebsite HTML:\n{html}",
                 ],
-                generation_config=GenerationConfig(
-                    temperature=0,
-                    max_output_tokens=4096,
-                ),
             )
+
         return result.text
+
     except Exception as e:
-        st.error(f"Error during Vertex website analysis: {str(e)}")
+        st.error(f"Website analysis error: {str(e)}")
+
         import traceback
-        st.error(traceback.format_exc())
+        st.code(traceback.format_exc())
+
         return None
 
 
-def analyze_pdf_via_files_api(pdf_bytes, prompt, model_name, model):
-    """Analyze a PDF directly with Vertex Gemini."""
+def analyze_pdf_via_files_api(pdf_bytes, prompt, model_name, client):
     try:
         with st.spinner(f"Analyzing with {model_name}..."):
-            result = model.generate_content(
-                [
+
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[
                     prompt,
-                    Part.from_data(data=pdf_bytes, mime_type="application/pdf"),
+                    types.Part.from_bytes(
+                        data=pdf_bytes,
+                        mime_type="application/pdf",
+                    ),
                 ],
-                generation_config=GenerationConfig(
-                    temperature=0,
-                    max_output_tokens=4096,
-                ),
             )
 
-        return result.text
+        return response.text
+
+    except Exception as e:
+        st.error(f"PDF analysis error: {str(e)}")
+
+        import traceback
+        st.code(traceback.format_exc())
+
+        return None
 
     except Exception as e:
         st.error(f"Error during Vertex analysis: {str(e)}")
@@ -730,7 +746,7 @@ def render_brochure_usp_analyzer():
             result_placeholder = st.empty()
 
             if analyze_button:
-                model = setup_vertex_model(project_id, location, selected_model)
+                client = setup_gemini_client()
                 if not model:
                     st.stop()
 
