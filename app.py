@@ -433,7 +433,7 @@ def analyze_pdf_via_files_api(pdf_bytes, prompt, model_name, client):
                 model=model_name,
                 contents=[
                     prompt,
-                    types.Part.from_bytes(
+                    types.types.Part.from_bytes(
                         data=pdf_bytes,
                         mime_type="application/pdf",
                     ),
