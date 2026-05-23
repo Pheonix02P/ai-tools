@@ -365,7 +365,8 @@ location = st.secrets["GCP_LOCATION"]
 def setup_gemini_client():
     try:
         credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
+            st.secrets["gcp_service_account"],
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],  # ← add this
         )
 
         client = genai.Client(
@@ -379,10 +380,8 @@ def setup_gemini_client():
 
     except Exception as e:
         st.error(f"Gemini client error: {str(e)}")
-
         import traceback
         st.code(traceback.format_exc())
-
         return None
 
 def download_pdf_from_url(url):
