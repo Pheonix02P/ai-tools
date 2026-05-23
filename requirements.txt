@@ -1,5 +1,5 @@
 streamlit
-google-cloud-aiplatform
+google-genai
 google-auth
 Pillow
 requests
