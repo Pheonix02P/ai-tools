@@ -671,7 +671,7 @@ def render_brochure_usp_analyzer():
     with col_upload:
         st.markdown("**📄 Upload Brochure PDF**")
         uploaded_file = st.file_uploader("Upload a brochure file", type=["pdf"], label_visibility="collapsed")
-        MAX_FILE_SIZE_MB = 20
+        MAX_FILE_SIZE_MB = 100
 
         if uploaded_file is not None:
             file_size_mb = uploaded_file.size / (1024 * 1024)
