@@ -14,6 +14,8 @@ import fitz  # PyMuPDF
 from json import JSONDecodeError
 import os
 from google.oauth2 import service_account
+import re as _re
+
 os.environ["GOOGLE_CLOUD_DISABLE_GRPC"] = "true"
 PYMUPDF_AVAILABLE = True
 
@@ -458,7 +460,7 @@ def analyze_pdf_via_files_api(pdf_bytes, prompt, model_name, client):
         return None
 
 
-import re
+
 
 # Words/patterns that must stay uppercase regardless of position
 _PRESERVE_UPPER = {
@@ -510,7 +512,7 @@ def _sentence_case(text: str) -> str:
 
         return " ".join(result)
 
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = _re.split(r'(?<=[.!?])\s+', text)
     return "  ".join(fix_sentence(s) for s in sentences)
 
 
@@ -639,7 +641,60 @@ def render_specifications(specs_data):
             st.divider()
 
 
+# ── Phone Number Masker ────────────────────────────────────────────────────────
+import re as _re
 
+_PHONE_RE = _re.compile(
+    r"""
+    (?:
+        (?:\+\d{1,3}[\s\-]?)
+        (?:\(?\d{1,5}\)?[\s\-]?)?
+        \d{2,5}[\s\-]\d{3,5}
+        (?:[\s\-]\d{3,5})?
+    )
+    |
+    (?:\d{4}[\s\-]\d{3}[\s\-]\d{4})
+    """,
+    _re.VERBOSE,
+)
+
+def mask_phone_numbers_in_pdf(pdf_bytes: bytes) -> tuple[bytes, int]:
+    """
+    Returns (masked_pdf_bytes, count_of_phones_masked).
+    Draws solid black rectangles over every detected phone number.
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    total = 0
+
+    for page in doc:
+        full_text = page.get_text("text")
+        hits = list(_PHONE_RE.finditer(full_text))
+        if not hits:
+            continue
+
+        for match in hits:
+            phone_str = match.group().strip()
+            rects = page.search_for(phone_str)
+
+            if rects:
+                for rect in rects:
+                    padded = fitz.Rect(rect.x0 - 2, rect.y0 - 1,
+                                       rect.x1 + 2, rect.y1 + 1)
+                    page.add_redact_annot(padded, fill=(0, 0, 0))
+                    total += 1
+            else:
+                for token in phone_str.split():
+                    for rect in page.search_for(token):
+                        padded = fitz.Rect(rect.x0 - 2, rect.y0 - 1,
+                                           rect.x1 + 2, rect.y1 + 1)
+                        page.add_redact_annot(padded, fill=(0, 0, 0))
+                        total += 1
+
+        page.apply_redactions()
+
+    buf = doc.tobytes(garbage=4, deflate=True)
+    doc.close()
+    return buf, total
 def render_brochure_usp_analyzer():
     st.title("USP using Gemini")
 
@@ -1088,17 +1143,69 @@ def render_brochure_usp_analyzer():
     # Footer
     st.divider()
     st.caption("Premium Property USP Analyzer — Powered by Google Gemini")
+def render_phone_masker():
+    st.title("📵 Phone Number Masker")
+    st.write(
+        "Upload a brochure PDF — all phone numbers will be masked with a "
+        "black rectangle and you can download the cleaned file."
+    )
 
+    uploaded_pdf = st.file_uploader(
+        "Upload Brochure PDF", type=["pdf"], key="masker_upload"
+    )
+
+    if uploaded_pdf is not None:
+        file_size_mb = uploaded_pdf.size / (1024 * 1024)
+        if file_size_mb > 100:
+            st.error("File exceeds 100 MB limit.")
+            return
+
+        st.info(f"**File:** {uploaded_pdf.name}  |  **Size:** {file_size_mb:.1f} MB")
+
+        if st.button("🔍 Mask Phone Numbers", type="primary"):
+            pdf_bytes = uploaded_pdf.read()
+            with st.spinner("Scanning and masking phone numbers…"):
+                try:
+                    masked_bytes, count = mask_phone_numbers_in_pdf(pdf_bytes)
+                    # ✅ Save to session state so download button persists
+                    st.session_state["masked_pdf_bytes"] = masked_bytes
+                    st.session_state["masked_pdf_count"] = count
+                    st.session_state["masked_pdf_name"] = (
+                        uploaded_pdf.name.rsplit(".", 1)[0] + "_masked.pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Error during masking: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+                    return
+
+        # ✅ Render result from session state — persists across reruns
+        if "masked_pdf_bytes" in st.session_state:
+            count = st.session_state["masked_pdf_count"]
+            if count == 0:
+                st.warning("⚠️ No phone numbers were detected in this PDF.")
+            else:
+                st.success(f"✅ {count} phone number instance(s) masked successfully.")
+
+            st.download_button(
+                label="⬇️ Download Masked PDF",
+                data=st.session_state["masked_pdf_bytes"],
+                file_name=st.session_state["masked_pdf_name"],
+                mime="application/pdf",
+                use_container_width=True,
+            )
 tool_mode = st.sidebar.radio(
     "Tool",
-    ["Consent Form Analyzer", "Brochure USP Analyzer"],
+    ["Consent Form Analyzer", "Brochure USP Analyzer", "Phone Number Masker"],
 )
 
 
 if tool_mode == "Brochure USP Analyzer":
     render_brochure_usp_analyzer()
     st.stop()
-
+if tool_mode == "Phone Number Masker":
+    render_phone_masker()
+    st.stop()
 # ?? Header ????????????????????????????????????????????????????????????????????
 st.markdown("""
 <div class="main-header">
