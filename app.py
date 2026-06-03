@@ -15,6 +15,8 @@ from json import JSONDecodeError
 import os
 from google.oauth2 import service_account
 import re as _re
+import pytesseract
+from PIL import Image as _PILImage    
 
 os.environ["GOOGLE_CLOUD_DISABLE_GRPC"] = "true"
 PYMUPDF_AVAILABLE = True
@@ -659,38 +661,52 @@ _PHONE_RE = _re.compile(
 )
 
 def mask_phone_numbers_in_pdf(pdf_bytes: bytes) -> tuple[bytes, int]:
-    """
-    Returns (masked_pdf_bytes, count_of_phones_masked).
-    Draws solid black rectangles over every detected phone number.
-    """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    SCALE = 3.0
+    mat = fitz.Matrix(SCALE, SCALE)
     total = 0
 
     for page in doc:
-        full_text = page.get_text("text")
-        hits = list(_PHONE_RE.finditer(full_text))
-        if not hits:
-            continue
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img = _PILImage.open(io.BytesIO(pix.tobytes("png")))
+        ocr_data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
 
-        for match in hits:
-            phone_str = match.group().strip()
-            rects = page.search_for(phone_str)
+        n = len(ocr_data["text"])
+        words = ocr_data["text"]
+        lines = {}
+        for i in range(n):
+            if not words[i].strip():
+                continue
+            key = (ocr_data["block_num"][i], ocr_data["par_num"][i], ocr_data["line_num"][i])
+            lines.setdefault(key, []).append(i)
 
-            if rects:
-                for rect in rects:
-                    padded = fitz.Rect(rect.x0 - 2, rect.y0 - 1,
-                                       rect.x1 + 2, rect.y1 + 1)
-                    page.add_redact_annot(padded, fill=(0, 0, 0))
-                    total += 1
-            else:
-                for token in phone_str.split():
-                    for rect in page.search_for(token):
-                        padded = fitz.Rect(rect.x0 - 2, rect.y0 - 1,
-                                           rect.x1 + 2, rect.y1 + 1)
-                        page.add_redact_annot(padded, fill=(0, 0, 0))
-                        total += 1
+        redacted = set()
+        for key, indices in lines.items():
+            line_text = " ".join(words[i] for i in indices)
+            for match in _PHONE_RE.finditer(line_text):
+                matched = match.group().strip()
+                if not matched:
+                    continue
+                pos = 0
+                word_pos = []
+                for i in indices:
+                    word_pos.append((pos, pos + len(words[i]), i))
+                    pos += len(words[i]) + 1
+                for (ws, we, wi) in word_pos:
+                    if ws < match.end() and we > match.start():
+                        redacted.add(wi)
 
-        page.apply_redactions()
+        pw, ph = page.rect.width, page.rect.height
+        iw, ih = img.size
+        for i in redacted:
+            x, y, w, h = ocr_data["left"][i], ocr_data["top"][i], ocr_data["width"][i], ocr_data["height"][i]
+            rect = fitz.Rect((x/iw)*pw - 2, (y/ih)*ph - 2,
+                             ((x+w)/iw)*pw + 2, ((y+h)/ih)*ph + 2)
+            page.add_redact_annot(rect, fill=(0, 0, 0))
+            total += 1
+
+        if redacted:
+            page.apply_redactions()
 
     buf = doc.tobytes(garbage=4, deflate=True)
     doc.close()
