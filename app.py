@@ -532,17 +532,21 @@ def _is_blank_or_mask(img_bytes: bytes, ext: str, blank_threshold: float = 0.97)
     try:
         from PIL import Image as PILImage
         import io as _io
+        from collections import Counter
 
         pil_img = PILImage.open(_io.BytesIO(img_bytes)).convert("RGB")
-        pixels = list(pil_img.getdata())
-        total = len(pixels)
-        if total == 0:
+        w, h = pil_img.size
+        if w == 0 or h == 0:
             return True
 
-        from collections import Counter
-        sample = pixels[::8]
+        # Sample pixels instead of loading all
+        sample = [pil_img.getpixel((x, y))
+                  for x in range(0, w, max(1, w // 30))
+                  for y in range(0, h, max(1, h // 30))]
+
         if not sample:
             return True
+
         most_common_colour, _ = Counter(sample).most_common(1)[0]
         close = sum(
             1 for p in sample
@@ -597,6 +601,9 @@ def extract_images_from_pdf(pdf_bytes, min_width=200, min_height=200):
                 height = base_image["height"]
 
                 if width < min_width or height < min_height:
+                    continue
+                MAX_PIXELS = 4000 * 4000  # 16 MP cap
+                if width * height > MAX_PIXELS:
                     continue
 
                 ext       = base_image["ext"]
