@@ -6,3 +6,4 @@ requests
 PyMuPDF
 google-cloud-aiplatform
 pytesseract
+pymupdf>=1.24.0
