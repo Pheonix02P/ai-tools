@@ -1415,7 +1415,7 @@ SCHEMA_DICT = {
     },
     "result": {
       "type": "boolean",
-      "description": "Evaluates to true ONLY IF ALL of the following conditions are met: 1) Consent form has a valid project name. 2) Form has a project address or project locality. 3) RERA registration status is correctly marked. 4) If RERA is Not Applicable, the not_applicable condition is validated correctly as per the rules. 5) All 5 compulsory disclaimer paragraphs are present and are an exact match (is_exact_match is true). If they are not present, reject the consent form by returning false. 6) Consent form has either a signature AND stamp, OR a signature AND is on builder letterhead. 7) Builder contact details (like contact email or mobile number) are available in the document. If ANY of these conditions fail, return false."
+      "description": "Evaluates to true ONLY IF ALL of the following conditions are met: 1) Consent form has a valid project name. 2) Form has a project address or project locality. 3) RERA registration status is correctly marked. 4) If RERA is Not Applicable, the not_applicable condition is validated correctly as per the rules. 5) All 5 compulsory disclaimer paragraphs are present and are an exact match (is_exact_match is true). If they are not present, reject the consent form by returning false. 6) Consent form has either a signature AND stamp, OR a signature AND is on builder letterhead. 7) Builder contact details (like contact email or mobile number) are available in the document. 8) A possession date is present in the form (possession.date is not null). If no possession date is mentioned anywhere in the form, reject the consent form by returning false. If ANY of these conditions fail, return false."
     }
   },
   "required": [
@@ -1450,8 +1450,8 @@ Rules:
 - For disclaimer_match, verify all 5 blocks against the reference text. They are COMPULSORY.
 - For sign_and_stamp, scan the entire bottom half of the document.
 - For builder_contact_details, extract only builder/advertiser contact details. Do not count 99acres.com support email, 99acres office address, or 99acres contact details.
-- result is true ONLY if ALL 7 conditions are met (valid project name, address/locality, RERA marked correctly, RERA validation passes if not applicable, all 5 compulsory disclaimer paragraphs are present and exactly match, signature+stamp OR signature+letterhead, contact details present).
-"""
+- If no possession date is mentioned anywhere in the form, reject the consent form: result must be false, even if all other conditions pass.
+- result is true ONLY if ALL 8 conditions are met (valid project name, address/locality, RERA marked correctly, RERA validation passes if not applicable, all 5 compulsory disclaimer paragraphs present and exactly match, signature+stamp OR signature+letterhead, contact details present, possession date present)."""
 
 # ── Sidebar — Vertex AI Configuration ──────────────────────────────────────────
 with st.sidebar:
