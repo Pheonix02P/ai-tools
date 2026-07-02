@@ -1681,6 +1681,11 @@ def consent_rejection_reasons(data: dict) -> list[str]:
     if not (address.get("full_address") or address.get("locality")):
         reasons.append("Project address/locality is missing.")
 
+    possession = data.get("possession") or {}
+    poss_date = possession.get("date")
+    if not poss_date or poss_date == "null":
+        reasons.append("Possession date is missing.")
+        
     rera = data.get("rera_registration") or {}
     rera_status = rera.get("status")
     if not rera_status or rera_status == "null":
