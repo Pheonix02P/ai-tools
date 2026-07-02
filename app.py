@@ -15,8 +15,7 @@ from json import JSONDecodeError
 import os
 from google.oauth2 import service_account
 import re as _re
-import pytesseract
-from PIL import Image as _PILImage    
+from PIL import Image as _PILImage
 
 os.environ["GOOGLE_CLOUD_DISABLE_GRPC"] = "true"
 PYMUPDF_AVAILABLE = True
@@ -650,74 +649,6 @@ def render_specifications(specs_data):
             st.divider()
 
 
-# ── Phone Number Masker ────────────────────────────────────────────────────────
-import re as _re
-
-_PHONE_RE = _re.compile(
-    r"""
-    (?:
-        (?:\+\d{1,3}[\s\-]?)
-        (?:\(?\d{1,5}\)?[\s\-]?)?
-        \d{2,5}[\s\-]\d{3,5}
-        (?:[\s\-]\d{3,5})?
-    )
-    |
-    (?:\d{4}[\s\-]\d{3}[\s\-]\d{4})
-    """,
-    _re.VERBOSE,
-)
-
-def mask_phone_numbers_in_pdf(pdf_bytes: bytes) -> tuple[bytes, int]:
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    SCALE = 3.0
-    mat = fitz.Matrix(SCALE, SCALE)
-    total = 0
-
-    for page in doc:
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        img = _PILImage.open(io.BytesIO(pix.tobytes("png")))
-        ocr_data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-
-        n = len(ocr_data["text"])
-        words = ocr_data["text"]
-        lines = {}
-        for i in range(n):
-            if not words[i].strip():
-                continue
-            key = (ocr_data["block_num"][i], ocr_data["par_num"][i], ocr_data["line_num"][i])
-            lines.setdefault(key, []).append(i)
-
-        redacted = set()
-        for key, indices in lines.items():
-            line_text = " ".join(words[i] for i in indices)
-            for match in _PHONE_RE.finditer(line_text):
-                matched = match.group().strip()
-                if not matched:
-                    continue
-                pos = 0
-                word_pos = []
-                for i in indices:
-                    word_pos.append((pos, pos + len(words[i]), i))
-                    pos += len(words[i]) + 1
-                for (ws, we, wi) in word_pos:
-                    if ws < match.end() and we > match.start():
-                        redacted.add(wi)
-
-        pw, ph = page.rect.width, page.rect.height
-        iw, ih = img.size
-        for i in redacted:
-            x, y, w, h = ocr_data["left"][i], ocr_data["top"][i], ocr_data["width"][i], ocr_data["height"][i]
-            rect = fitz.Rect((x/iw)*pw - 2, (y/ih)*ph - 2,
-                             ((x+w)/iw)*pw + 2, ((y+h)/ih)*ph + 2)
-            page.add_redact_annot(rect, fill=(0, 0, 0))
-            total += 1
-
-        if redacted:
-            page.apply_redactions()
-
-    buf = doc.tobytes(garbage=4, deflate=True)
-    doc.close()
-    return buf, total
 def render_brochure_usp_analyzer():
     st.title("USP using Gemini")
 
@@ -1166,68 +1097,17 @@ def render_brochure_usp_analyzer():
     # Footer
     st.divider()
     st.caption("Premium Property USP Analyzer — Powered by Google Gemini")
-def render_phone_masker():
-    st.title("📵 Phone Number Masker")
-    st.write(
-        "Upload a brochure PDF — all phone numbers will be masked with a "
-        "black rectangle and you can download the cleaned file."
-    )
-
-    uploaded_pdf = st.file_uploader(
-        "Upload Brochure PDF", type=["pdf"], key="masker_upload"
-    )
-
-    if uploaded_pdf is not None:
-        file_size_mb = uploaded_pdf.size / (1024 * 1024)
-        if file_size_mb > 100:
-            st.error("File exceeds 100 MB limit.")
-            return
-
-        st.info(f"**File:** {uploaded_pdf.name}  |  **Size:** {file_size_mb:.1f} MB")
-
-        if st.button("🔍 Mask Phone Numbers", type="primary"):
-            pdf_bytes = uploaded_pdf.read()
-            with st.spinner("Scanning and masking phone numbers…"):
-                try:
-                    masked_bytes, count = mask_phone_numbers_in_pdf(pdf_bytes)
-                    # ✅ Save to session state so download button persists
-                    st.session_state["masked_pdf_bytes"] = masked_bytes
-                    st.session_state["masked_pdf_count"] = count
-                    st.session_state["masked_pdf_name"] = (
-                        uploaded_pdf.name.rsplit(".", 1)[0] + "_masked.pdf"
-                    )
-                except Exception as e:
-                    st.error(f"Error during masking: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-                    return
-
-        # ✅ Render result from session state — persists across reruns
-        if "masked_pdf_bytes" in st.session_state:
-            count = st.session_state["masked_pdf_count"]
-            if count == 0:
-                st.warning("⚠️ No phone numbers were detected in this PDF.")
-            else:
-                st.success(f"✅ {count} phone number instance(s) masked successfully.")
-
-            st.download_button(
-                label="⬇️ Download Masked PDF",
-                data=st.session_state["masked_pdf_bytes"],
-                file_name=st.session_state["masked_pdf_name"],
-                mime="application/pdf",
-                use_container_width=True,
-            )
 tool_mode = st.sidebar.radio(
     "Tool",
-    ["Consent Form Analyzer", "Brochure USP Analyzer", "Phone Number Masker"],
+    ["Consent Form Analyzer"],
+    # NOTE: "Brochure USP Analyzer" is temporarily disabled — add it back to the
+    # list above (and it will work immediately, the code below is untouched)
+    # to re-enable it.
 )
 
 
 if tool_mode == "Brochure USP Analyzer":
     render_brochure_usp_analyzer()
-    st.stop()
-if tool_mode == "Phone Number Masker":
-    render_phone_masker()
     st.stop()
 # ?? Header ????????????????????????????????????????????????????????????????????
 st.markdown("""
@@ -1416,7 +1296,7 @@ SCHEMA_DICT = {
         },
         "block_2_match": {
           "type": "boolean",
-          "description": "WARNING: STRICT MATCH REQUIRED. True ONLY IF extracted_text_block_2 matches this text VERBATIM: 'We undertake that the information in the advertisement and the Project Page, as provided by us is correct. We further undertake that in the event any of the information in the advertisement and the Project Page, as provided by us is found to be inaccurate / incorrect/ false, we shall immediately seek correction of the same by informing the support team of 99acres.com. We further agree and undertake to indemnify, defend and hold harmless 99acres.com (and its directors, managers, officers, employees etc.) from any claim, proceeding, loss, cost, penalty, fine or expense (including attorney’s fees) arising out of our breach/ non-compliance/misrepresentation of any information or undertaking given in this consent form, relevant 99acres.com terms, applicable law, Rules and Regulation, including guidelines/directions issued by Relevant Regulatory Authority of India/State and any other statutory authority, or orders of courts, etc., as applicable from time to time.'"
+          "description": "WARNING: STRICT MATCH REQUIRED. True ONLY IF extracted_text_block_2 matches this text VERBATIM: 'We undertake that the information in the advertisement and the Project Page, as provided by us is correct. We further undertake that in the event any of the information in the advertisement and the Project Page, as provided by us is found to be inaccurate / incorrect/ false, we shall immediately seek correction of the same by informing the support team of 99acres.com. We further agree and undertake to indemnify, defend and hold harmless 99acres.com (and its directors, managers, officers, employees etc.) from any claim, proceeding, loss, cost, penalty, fine or expense (including attorney's fees) arising out of our breach/ non-compliance/misrepresentation of any information or undertaking given in this consent form, relevant 99acres.com terms, applicable law, Rules and Regulation, including guidelines/directions issued by Relevant Regulatory Authority of India/State and any other statutory authority, or orders of courts, etc., as applicable from time to time.'"
         },
         "extracted_text_block_3": {
           "type": "string",
@@ -1858,48 +1738,78 @@ def consent_rejection_reasons(data: dict) -> list[str]:
 
 
 # ── Main UI ───────────────────────────────────────────────────────────────────
-uploaded = st.file_uploader(
+uploaded_files = st.file_uploader(
     "Upload Consent Form",
     type=["jpg", "jpeg", "png", "webp", "pdf"],
-    help="Upload a scanned image or PDF of the 99acres consent form",
+    accept_multiple_files=True,
+    help=(
+        "Upload a scanned image or PDF of the 99acres consent form. "
+        "For a multi-page form (2-3 pages), upload one JPG/PNG/WEBP file per page "
+        "(select multiple files at once) — a multi-page PDF also works as a single upload."
+    ),
 )
-st.markdown('<p class="upload-hint">Supports JPG · PNG · WEBP · PDF (single or multi-page)</p>',
-            unsafe_allow_html=True)
+st.markdown(
+    '<p class="upload-hint">Supports JPG · PNG · WEBP (upload multiple pages) · PDF (single or multi-page)</p>',
+    unsafe_allow_html=True,
+)
 
-if uploaded:
-    ext = uploaded.name.rsplit(".", 1)[-1].lower()
-    is_pdf = ext == "pdf"
+if uploaded_files:
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
+                "png": "image/png", "webp": "image/webp"}
 
-    uploaded.seek(0)
-    raw_bytes = uploaded.read()
+    # Read every uploaded file up front into memory.
+    page_files = []
+    for f in uploaded_files:
+        f.seek(0)
+        page_files.append({
+            "name": f.name,
+            "ext": f.name.rsplit(".", 1)[-1].lower(),
+            "bytes": f.read(),
+            "size": f.size,
+        })
+
+    # A single PDF is treated as its own multi-page document. Multiple files
+    # (JPG/PNG/WEBP, one per page) are treated as pages of one consent form.
+    is_pdf = len(page_files) == 1 and page_files[0]["ext"] == "pdf"
+
+    if len(page_files) > 1 and any(pf["ext"] == "pdf" for pf in page_files):
+        st.error("Please upload either a single PDF, or multiple JPG/PNG/WEBP images — not a mix.")
+        st.stop()
 
     if not project_id:
         st.warning("⚠️ Please enter your GCP Project ID in the sidebar to proceed.")
         st.stop()
 
+    total_size_kb = sum(pf["size"] for pf in page_files) / 1024
+    file_names = ", ".join(pf["name"] for pf in page_files)
+
     # Top control bar
     st.markdown("---")
     col_fileinfo, col_action = st.columns([2, 1])
     with col_fileinfo:
-        st.markdown(f"**File Ready:** `{uploaded.name}` ({uploaded.size / 1024:.1f} KB)")
+        if len(page_files) > 1:
+            st.markdown(f"**Files Ready:** {len(page_files)} pages — `{file_names}` ({total_size_kb:.1f} KB)")
+        else:
+            st.markdown(f"**File Ready:** `{file_names}` ({total_size_kb:.1f} KB)")
     with col_action:
         analyze_btn = st.button("🔍 Analyze Form", type="primary", use_container_width=True)
     st.markdown("---")
 
     if analyze_btn:
-        mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                    "png": "image/png", "webp": "image/webp"}
-
         with st.spinner("🤖 Analyzing with Gemini Vision…"):
             try:
                 if is_pdf:
                     # Convert each PDF page → PNG → Gemini part
-                    page_imgs = pdf_to_images(raw_bytes, dpi=150)
+                    page_imgs = pdf_to_images(page_files[0]["bytes"], dpi=150)
                     parts = [make_part(pg, "image/png") for pg in page_imgs]
                     st.toast(f"📄 Processing {len(parts)} PDF page(s)…")
                 else:
-                    mime = mime_map.get(ext, "image/jpeg")
-                    parts = [make_part(raw_bytes, mime)]
+                    parts = []
+                    for pf in page_files:
+                        mime = mime_map.get(pf["ext"], "image/jpeg")
+                        parts.append(make_part(pf["bytes"], mime))
+                    if len(parts) > 1:
+                        st.toast(f"🖼️ Processing {len(parts)} image page(s)…")
 
                 data = analyze_form(project_id, location, parts)
             except json.JSONDecodeError as e:
@@ -2042,7 +1952,7 @@ if uploaded:
             st.download_button(
                 label="⬇️ Download JSON Result",
                 data=json.dumps(data, indent=2, ensure_ascii=False),
-                file_name=f"consent_form_result_{uploaded.name.rsplit('.', 1)[0]}.json",
+                file_name=f"consent_form_result_{page_files[0]['name'].rsplit('.', 1)[0]}.json",
                 mime="application/json",
                 use_container_width=True
             )
@@ -2051,26 +1961,32 @@ if uploaded:
             st.markdown("### 🖼️ Document Preview")
             with st.container(border=True):
                 if is_pdf:
-                    page_images = pdf_to_images(raw_bytes, dpi=120)
+                    page_images = pdf_to_images(page_files[0]["bytes"], dpi=120)
                     st.caption(f"PDF — {len(page_images)} page(s)")
                     for i, pg_bytes in enumerate(page_images):
                         st.image(pg_bytes, caption=f"Page {i+1}", use_container_width=True)
                         st.markdown("---")
                 else:
-                    st.image(raw_bytes, caption="Uploaded Form", use_container_width=True)
+                    st.caption(f"{len(page_files)} page(s)")
+                    for i, pf in enumerate(page_files):
+                        st.image(pf["bytes"], caption=f"Page {i+1} — {pf['name']}", use_container_width=True)
+                        st.markdown("---")
 
     else:
         # Not analyzed yet, just show the document preview
         st.markdown("### 🖼️ Document Preview")
         with st.container(border=True):
             if is_pdf:
-                page_images = pdf_to_images(raw_bytes, dpi=120)
+                page_images = pdf_to_images(page_files[0]["bytes"], dpi=120)
                 st.caption(f"PDF — {len(page_images)} page(s)")
                 for i, pg_bytes in enumerate(page_images):
                     st.image(pg_bytes, caption=f"Page {i+1}", use_container_width=True)
                     st.markdown("---")
             else:
-                st.image(raw_bytes, caption="Uploaded Form", use_container_width=True)
+                st.caption(f"{len(page_files)} page(s)")
+                for i, pf in enumerate(page_files):
+                    st.image(pf["bytes"], caption=f"Page {i+1} — {pf['name']}", use_container_width=True)
+                    st.markdown("---")
 
 else:
     st.info("👆 Upload a consent form image to get started.")
